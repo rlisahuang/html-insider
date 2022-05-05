@@ -1,16 +1,15 @@
 import CDP from "chrome-remote-interface";
 import * as chromeLauncher from "chrome-launcher";
+import { stdout, stderr, argv } from "process";
 
 type LaunchedChrome = chromeLauncher.LaunchedChrome;
 
-const dest = "file:///Users/lisa/projects/LiveWeb/tasks/toy/test.html";
-const srcJS = "file:///Users/lisa/projects/LiveWeb/tasks/toy/script.js";
-const program = `
-    document.querySelector('button#btn1');
-    // btn.click();
-    // document.body.innerHTML;
-    // getEventListeners(btn);
-`;
+const event = argv[2] ?? "click";
+const target_selector = argv[3] ?? "button#btn1";
+const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/toy/test.html";
+
+// const srcJS = "file:///Users/lisa/projects/LiveWeb/tasks/toy/script.js";
+// const program = `document.querySelector('${target_selector}');`;
 
 // Optional: set logging level of launcher to see its output.
 // Install it using: npm i --save lighthouse-logger
@@ -38,7 +37,7 @@ function launchChrome(headless: boolean | undefined = true): Promise<LaunchedChr
 
 async function main() {
     const chrome = await launchChrome();
-    const protocol = await CDP({ port: chrome.port, local:true }); // client type
+    const protocol = await CDP({ port: chrome.port, local: true }); // client type
 
 
     // Extract the DevTools protocol domains we need and enable them.
@@ -46,75 +45,111 @@ async function main() {
     const { Page, Runtime, Debugger, DOM, DOMDebugger } = protocol;
     await Promise.all([Page.enable(), Runtime.enable()]);
 
-    Page.navigate({ url: dest });
+    Page.navigate({ url: viewFile });
     Debugger.enable({});
     DOM.enable();
+
+    const scripts: Map<string, string> = new Map<string, string>();
+
+    Debugger.on('scriptParsed', (e) => {
+        if (''.localeCompare(e.url) !== 0) {
+
+            if (scripts.has(e.scriptId) && scripts.get(e.scriptId).localeCompare(e.url) !== 0) {
+                throw new Error('scriptId and url mismatch');
+            }
+
+            // filter out non-local non-js files
+            // file://[any_char]+.js
+            // TODO: does it work for webapps running on localhost?
+            const regex_macos = new RegExp(/file:\/\/\S+\.js/g)
+            if (!scripts.has(e.scriptId) && e.url.match(regex_macos)) {
+                scripts.set(e.scriptId, e.url);
+            }
+
+        }
+    });
 
 
     // Wait for window.onload before doing stuff.
     Page.on('loadEventFired', async () => {
-        // chromeDebugger.
-        const js = program;
 
-        const bodyID = (await Runtime.evaluate({ expression: "document.body"})).result.objectId;
+        const bodyID = (await Runtime.evaluate({ expression: "document.body" })).result.objectId;
 
-        const btnID = (await Runtime.evaluate({ expression: "document.querySelector('button#btn1')" })).result.objectId;
-
-        const listeners = (await DOMDebugger.getEventListeners({ objectId: btnID })).listeners;
-        // const scriptIDs = listeners.map(listener => listener.scriptId);
-
-        // const scriptSrcs = await Promise.all(
-        //     scriptIDs.map(async (id) => (await Debugger.getScriptSource({ scriptId: id })).scriptSource)
-        //     );
-
-        // console.log(listeners);
-        listeners.forEach(listener => {
-            Debugger.setBreakpoint({location: {scriptId: listener.scriptId, lineNumber: listener.lineNumber, columnNumber: listener.columnNumber}});    
-        });
-        
-        // TODO: figure out how to set and pause and remove breakpoints
-
-
-        let htmls: string[] = [];
-        // await DOMDebugger.setEventListenerBreakpoint({ eventName: 'click' });
-        let entered = false;
+        let htmls: Array<{ [key: string]: any }> = [];
+        await DOMDebugger.setEventListenerBreakpoint({ eventName: event });
+        let last: string = "";
         Debugger.on('paused', async (e) => {
-            console.log('stopped');
-            console.log(e.callFrames);
-            const html = (await DOM.getOuterHTML({objectId: bodyID})).outerHTML;
-            // if (htmls.length > 0 && html != htmls[htmls.length-1])
-                htmls.push(html);
-            // if (!entered) {
-            //     console.log('stepped into');
-            //     await Debugger.stepInto({});
-            // }
+
+            /**
+             * - obtain stack traces from scripts in `scripts` and their lineno
+             * - obtain html
+             * - if html different from the last one recorded:
+             *  - for all script/lineno pairs, record html to `htmls` in the following format:
+             *    {
+             *      "script": scripts.get(scriptId),
+             *      "lineno": lineno,
+             *      "html": html
+             *     }
+             * - set `last` to current
+             *  
+             */
+
+            const html = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
+            const scriptsInvolved: Array<{ [key: string]: any }> = [];
+            e.callFrames.forEach(frame => {
+                if (scripts.has(frame.location.scriptId)) {
+                    scriptsInvolved.push({
+                        script: scripts.get(frame.location.scriptId),
+                        lineno: frame.location.lineNumber,
+                    });
+                }
+            });
+
+            if (scriptsInvolved.length > 0) {
+                if (last.localeCompare(html) !== 0) {
+                    scriptsInvolved.forEach(script => {
+                        htmls = [
+                            ...htmls,
+                            {
+                                ...script,
+                                html: html
+                            }
+                        ]
+                    });
+                }
+
+                last = html;
+            }
+
             await Debugger.stepInto({}); // this line works
-            // await Debugger.pause();
             // TODO: if Debugger paused in HTML, then step into, otherwise step over, and if Debugger ends in HTML, then resume
         });
 
-        
 
-
+        // TODO: the argument of `dispatchEvent depends on event name/type
         await Runtime.evaluate({
-            expression: `const btn =document.querySelector('button#btn1'); 
-           btn.dispatchEvent(new MouseEvent('click'));` });
+            expression: `const btn =document.querySelector('${target_selector}'); 
+           btn.dispatchEvent(new MouseEvent('${event}'));`
+        });
 
 
 
+        // console.log(scripts);
         console.log(htmls);
-
-        // console.log(result);
-        // console.log("Title of page: " + result.result.value);
+        stdout.write(JSON.stringify({ result: htmls }));
 
         // setTimeout(async () => {
-            await protocol.close();
-            await chrome.kill(); // Kill Chrome.
-        // }, 60000);
+        await protocol.close();
+        await chrome.kill(); // Kill Chrome.
+        // }, 600000);
     });
 }
 
 // entry point
 (async function () {
-    await main();
+    try {
+        await main();
+    } catch (e) {
+        stderr.write(e.message);
+    }
 })();
