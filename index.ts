@@ -135,7 +135,7 @@ async function main() {
 
 
         // console.log(scripts);
-        console.log(htmls);
+        // console.log(htmls);
         stdout.write(JSON.stringify({ result: htmls }));
 
         // setTimeout(async () => {
