@@ -4,8 +4,8 @@ import { stdout, stderr, argv } from "process";
 
 type LaunchedChrome = chromeLauncher.LaunchedChrome;
 
-const event = argv[2] ?? "click";
-const target_selector = argv[3] ?? "button#btn1";
+const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click", "click"]; // TODO: list
+const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["button#btn1", "button#btn2"]; // TODO: LIST
 const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/toy/test.html";
 
 // const srcJS = "file:///Users/lisa/projects/LiveWeb/tasks/toy/script.js";
@@ -73,12 +73,13 @@ async function main() {
     // Wait for window.onload before doing stuff.
     Page.on('loadEventFired', async () => {
 
-        const bodyID = (await Runtime.evaluate({ expression: "document.body" })).result.objectId;
-
         let htmls: Array<{ [key: string]: any }> = [];
-        await DOMDebugger.setEventListenerBreakpoint({ eventName: event });
+        let newHTMLs: Array<{ [key: string]: any }> = [];
+
+
         let last: string = "";
         Debugger.on('paused', async (e) => {
+            // console.log('hi');
 
             /**
              * - obtain stack traces from scripts in `scripts` and their lineno
@@ -93,6 +94,8 @@ async function main() {
              * - set `last` to current
              *  
              */
+            const bodyID = (await Runtime.evaluate({ expression: "document.body" })).result.objectId;
+            // console.log(bodyID);
 
             const html = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
             const scriptsInvolved: Array<{ [key: string]: any }> = [];
@@ -105,11 +108,13 @@ async function main() {
                 }
             });
 
+            // TODO: record the event and target info as well
+            // also record whether the original target still exists in the page (by looking at the runtime objectId of the target based on query)
             if (scriptsInvolved.length > 0) {
                 if (last.localeCompare(html) !== 0) {
                     scriptsInvolved.forEach(script => {
-                        htmls = [
-                            ...htmls,
+                        newHTMLs = [
+                            ...newHTMLs,
                             {
                                 ...script,
                                 html: html
@@ -126,22 +131,41 @@ async function main() {
         });
 
 
+        if (events.length !== target_selectors.length) {
+            throw new Error('events and target_selectors must have the same length');
+        }
+
+        for (let i = 0; i < events.length; i++) {
+            await DOMDebugger.setEventListenerBreakpoint({ eventName: events[i] });
+
+            await Runtime.evaluate({
+                expression: `document.querySelector('${target_selectors[i]}').dispatchEvent(new MouseEvent('${events[i]}'));`
+            });
+            newHTMLs.forEach (html => {
+                if (!html.event) {
+                    html.event = events[i];
+                }
+                if (!html.target) {
+                    html.target = target_selectors[i];
+                }
+            });
+            htmls = [...htmls, ...newHTMLs];
+
+            newHTMLs = []; // reset new htmls
+        }
+
         // TODO: the argument of `dispatchEvent depends on event name/type
-        await Runtime.evaluate({
-            expression: `const btn =document.querySelector('${target_selector}'); 
-           btn.dispatchEvent(new MouseEvent('${event}'));`
-        });
 
 
 
-        // console.log(scripts);
-        // console.log(htmls);
-        stdout.write(JSON.stringify({ result: htmls }));
+
 
         // setTimeout(async () => {
+        // console.log(htmls);
+        stdout.write(JSON.stringify({ result: htmls }));
         await protocol.close();
         await chrome.kill(); // Kill Chrome.
-        // }, 600000);
+        // }, 10000);
     });
 }
 
