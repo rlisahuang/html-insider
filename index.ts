@@ -24,6 +24,7 @@ const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/toy/test.
  */
 function launchChrome(headless: boolean | undefined = true): Promise<LaunchedChrome> {
     // headless = false;
+    // TODO!!!: window size based on the interface's size from client
     return chromeLauncher.launch({
         port: 9224, // Uncomment to force a specific port of your choice.
         chromeFlags: [
@@ -44,6 +45,7 @@ async function main() {
     // See API docs: https://chromedevtools.github.io/devtools-protocol/
     const { Page, Runtime, Debugger, DOM, DOMDebugger } = protocol;
     await Promise.all([Page.enable(), Runtime.enable()]);
+
 
     Page.navigate({ url: viewFile });
     Debugger.enable({});
@@ -73,9 +75,10 @@ async function main() {
     // Wait for window.onload before doing stuff.
     Page.on('loadEventFired', async () => {
 
+
         let htmls: Array<{ [key: string]: any }> = [];
         let newHTMLs: Array<{ [key: string]: any }> = [];
-
+        let pngs: Array<HTMLImageElement> = [];
 
         let last: string = "";
         Debugger.on('paused', async (e) => {
@@ -94,10 +97,11 @@ async function main() {
              * - set `last` to current
              *  
              */
-            const bodyID = (await Runtime.evaluate({ expression: "document.body" })).result.objectId;
-            // console.log(bodyID);
+            const body = (await Runtime.evaluate({ expression: "document.body" })).result
+            const bodyID = body.objectId;
 
             const html = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
+            const screenshot = (await Page.captureScreenshot({ format: 'png' })).data;
             const scriptsInvolved: Array<{ [key: string]: any }> = [];
             e.callFrames.forEach(frame => {
                 if (scripts.has(frame.location.scriptId)) {
@@ -117,10 +121,13 @@ async function main() {
                             ...newHTMLs,
                             {
                                 ...script,
-                                html: html
+                                html: html,
+                                screenshot: screenshot,
                             }
-                        ]
+                        ];
                     });
+                    // const img = new Image();
+                    // img.src = await toPng(html);
                 }
 
                 last = html;
@@ -136,12 +143,13 @@ async function main() {
         }
 
         for (let i = 0; i < events.length; i++) {
+
             await DOMDebugger.setEventListenerBreakpoint({ eventName: events[i] });
 
             await Runtime.evaluate({
                 expression: `document.querySelector('${target_selectors[i]}').dispatchEvent(new MouseEvent('${events[i]}'));`
             });
-            newHTMLs.forEach (html => {
+            newHTMLs.forEach(html => {
                 if (!html.event) {
                     html.event = events[i];
                 }
@@ -152,10 +160,11 @@ async function main() {
             htmls = [...htmls, ...newHTMLs];
 
             newHTMLs = []; // reset new htmls
+
         }
 
-        // TODO: the argument of `dispatchEvent depends on event name/type
 
+        // TODO: the argument of `dispatchEvent depends on event name/type
 
 
 
@@ -163,6 +172,7 @@ async function main() {
         // setTimeout(async () => {
         // console.log(htmls);
         stdout.write(JSON.stringify({ result: htmls }));
+
         await protocol.close();
         await chrome.kill(); // Kill Chrome.
         // }, 10000);
