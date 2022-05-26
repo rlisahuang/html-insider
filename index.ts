@@ -4,9 +4,11 @@ import { stdout, stderr, argv } from "process";
 
 type LaunchedChrome = chromeLauncher.LaunchedChrome;
 
-const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click", "click"]; // TODO: list
-const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["button#btn1", "button#btn2"]; // TODO: LIST
+const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click"]; // TODO: list
+const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["button#btn1"]; // TODO: LIST
 const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/toy/test.html";
+const height = argv[5] ?? undefined;
+const width = argv[6] ?? undefined;
 
 // const srcJS = "file:///Users/lisa/projects/LiveWeb/tasks/toy/script.js";
 // const program = `document.querySelector('${target_selector}');`;
@@ -24,12 +26,12 @@ const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/toy/test.
  */
 function launchChrome(headless: boolean | undefined = true): Promise<LaunchedChrome> {
     // headless = false;
-    // TODO!!!: window size based on the interface's size from client
+    const windowSize = (height && width) ? `--window-size=${height},${width}` : "--start-fullscreen";
+
     return chromeLauncher.launch({
         port: 9224, // Uncomment to force a specific port of your choice.
         chromeFlags: [
-            //   "--window-size=412,732",
-            "--start-fullscreen",
+            windowSize,
             "--disable-gpu",
             headless ? "--headless" : "",
         ],
@@ -170,8 +172,10 @@ async function main() {
 
 
         // setTimeout(async () => {
-        // console.log(htmls);
+        // const json = JSON.stringify({result: htmls});
+        // console.log(JSON.parse(json));
         stdout.write(JSON.stringify({ result: htmls }));
+        // stdout.write('hi');
 
         await protocol.close();
         await chrome.kill(); // Kill Chrome.
