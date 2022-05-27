@@ -1,17 +1,15 @@
 import CDP from "chrome-remote-interface";
 import * as chromeLauncher from "chrome-launcher";
 import { stdout, stderr, argv } from "process";
+import { Domain } from "domain";
 
 type LaunchedChrome = chromeLauncher.LaunchedChrome;
 
-const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click"]; // TODO: list
-const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["button#btn1"]; // TODO: LIST
+const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click", "click", "click"]; // TODO: list
+const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["button#btn1", "button#btn2", "button#btn3"]; // TODO: LIST
 const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/toy/test.html";
 const height = argv[5] ?? undefined;
 const width = argv[6] ?? undefined;
-
-// const srcJS = "file:///Users/lisa/projects/LiveWeb/tasks/toy/script.js";
-// const program = `document.querySelector('${target_selector}');`;
 
 // Optional: set logging level of launcher to see its output.
 // Install it using: npm i --save lighthouse-logger
@@ -26,7 +24,8 @@ const width = argv[6] ?? undefined;
  */
 function launchChrome(headless: boolean | undefined = true): Promise<LaunchedChrome> {
     // headless = false;
-    const windowSize = (height && width) ? `--window-size=${height},${width}` : "--start-fullscreen";
+    // const windowSize = (height && width) ? `--window-size=${height},${width}` : "--start-fullscreen";
+    const windowSize = (height && width) ? `--window-size=${height},${width}` : "--window-size=600,400";
 
     return chromeLauncher.launch({
         port: 9224, // Uncomment to force a specific port of your choice.
@@ -47,7 +46,6 @@ async function main() {
     // See API docs: https://chromedevtools.github.io/devtools-protocol/
     const { Page, Runtime, Debugger, DOM, DOMDebugger } = protocol;
     await Promise.all([Page.enable(), Runtime.enable()]);
-
 
     Page.navigate({ url: viewFile });
     Debugger.enable({});
@@ -80,11 +78,11 @@ async function main() {
 
         let htmls: Array<{ [key: string]: any }> = [];
         let newHTMLs: Array<{ [key: string]: any }> = [];
-        let pngs: Array<HTMLImageElement> = [];
+        let watchedEvents = new Set();
 
         let last: string = "";
+        const bodyID = (await Runtime.evaluate({ expression: "document.body" })).result.objectId;
         Debugger.on('paused', async (e) => {
-            // console.log('hi');
 
             /**
              * - obtain stack traces from scripts in `scripts` and their lineno
@@ -99,8 +97,6 @@ async function main() {
              * - set `last` to current
              *  
              */
-            const body = (await Runtime.evaluate({ expression: "document.body" })).result
-            const bodyID = body.objectId;
 
             const html = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
             const screenshot = (await Page.captureScreenshot({ format: 'png' })).data;
@@ -114,8 +110,6 @@ async function main() {
                 }
             });
 
-            // TODO: record the event and target info as well
-            // also record whether the original target still exists in the page (by looking at the runtime objectId of the target based on query)
             if (scriptsInvolved.length > 0) {
                 if (last.localeCompare(html) !== 0) {
                     scriptsInvolved.forEach(script => {
@@ -128,14 +122,12 @@ async function main() {
                             }
                         ];
                     });
-                    // const img = new Image();
-                    // img.src = await toPng(html);
                 }
 
                 last = html;
             }
 
-            await Debugger.stepInto({}); // this line works
+            await Debugger.stepInto({});
             // TODO: if Debugger paused in HTML, then step into, otherwise step over, and if Debugger ends in HTML, then resume
         });
 
@@ -144,21 +136,41 @@ async function main() {
             throw new Error('events and target_selectors must have the same length');
         }
 
+
+        let docId = (await DOM.getDocument({})).root.nodeId;
+
         for (let i = 0; i < events.length; i++) {
 
-            await DOMDebugger.setEventListenerBreakpoint({ eventName: events[i] });
+            if (!watchedEvents.has(events[i])) {
+                await DOMDebugger.setEventListenerBreakpoint({ eventName: events[i] });
+                watchedEvents.add(events[i]);
+            }
 
+            const targetNodeId = (await DOM.querySelector({
+                nodeId: docId,
+                selector: target_selectors[i],
+            })).nodeId;
+
+
+            // TODO: the argument of `dispatchEvent depends on event name/type
             await Runtime.evaluate({
                 expression: `document.querySelector('${target_selectors[i]}').dispatchEvent(new MouseEvent('${events[i]}'));`
             });
-            newHTMLs.forEach(html => {
+
+            for (const html of newHTMLs) {
                 if (!html.event) {
                     html.event = events[i];
                 }
                 if (!html.target) {
                     html.target = target_selectors[i];
                 }
-            });
+                const currTargetNodeId = (await DOM.querySelector({
+                    nodeId: docId,
+                    selector: target_selectors[i]
+                })).nodeId;
+                html.targetExists = targetNodeId === currTargetNodeId;
+            }
+
             htmls = [...htmls, ...newHTMLs];
 
             newHTMLs = []; // reset new htmls
@@ -166,16 +178,8 @@ async function main() {
         }
 
 
-        // TODO: the argument of `dispatchEvent depends on event name/type
-
-
-
-
         // setTimeout(async () => {
-        // const json = JSON.stringify({result: htmls});
-        // console.log(JSON.parse(json));
         stdout.write(JSON.stringify({ result: htmls }));
-        // stdout.write('hi');
 
         await protocol.close();
         await chrome.kill(); // Kill Chrome.
