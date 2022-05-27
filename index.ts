@@ -1,7 +1,6 @@
 import CDP from "chrome-remote-interface";
 import * as chromeLauncher from "chrome-launcher";
 import { stdout, stderr, argv } from "process";
-import { Domain } from "domain";
 
 type LaunchedChrome = chromeLauncher.LaunchedChrome;
 
