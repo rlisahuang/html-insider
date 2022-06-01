@@ -77,8 +77,10 @@ async function main() {
         let watchedEvents = new Set();
         const bodyID = (await Runtime.evaluate({ expression: "document.body" })).result.objectId;
         let last: string = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
+        const screenshot = (await Page.captureScreenshot({ format: 'png' })).data;
+
         let lastCallStack: Array<{ [key: string]: any }> = []; // local scripts only
-        let htmls: Array<{ [key: string]: any }> = [{start: true, html: last, events: []}];
+        let htmls: Array<{ [key: string]: any }> = [{start: true, html: last, events: [], screenshot: screenshot}];
         let newHTMLs: Array<{ [key: string]: any }> = [];
 
         let lastEvent: string | undefined;
