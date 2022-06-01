@@ -86,6 +86,7 @@ async function main() {
         let lastEvent: string | undefined;
         let lastTarget: string | undefined;
         let lastTargetId: number | undefined;
+        let lastIdx: number | undefined;
 
         Debugger.on('paused', async (e) => {
             const html = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
@@ -103,6 +104,7 @@ async function main() {
                             html: html,
                             events: [
                                 {
+                                    idx: lastIdx!,
                                     name: lastEvent!,
                                     target: lastTarget!,
                                     targetExists: lastTargetId === newTargetId
@@ -149,6 +151,8 @@ async function main() {
                 watchedEvents.add(events[i]);
             }
 
+            lastIdx = i;
+            // TODO: the following can be refactored
             lastEvent = events[i];
             lastTarget = target_selectors[i];
 
@@ -169,6 +173,7 @@ async function main() {
 
                 htmls[0].events.push(
                     {
+                        idx: i,
                         name: events[i],
                         target: target_selectors[i],
                         targetExists: true,
@@ -176,6 +181,7 @@ async function main() {
                 )
             } else {
                 htmls[htmls.length - 1].events.push({
+                    idx: i,
                     name: events[i],
                     target: target_selectors[i],
                     targetExists: true,
