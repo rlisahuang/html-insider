@@ -1,11 +1,11 @@
-import CDP from "chrome-remote-interface";
+import CDP, { Protocol } from "chrome-remote-interface";
 import * as chromeLauncher from "chrome-launcher";
 import { stdout, stderr, argv } from "process";
 
 type LaunchedChrome = chromeLauncher.LaunchedChrome;
 
-const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click", "click", "click"]; // TODO: list
-const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["button#btn1", "button#btn2", "button#btn3"]; // TODO: LIST
+const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click"]; // TODO: list
+const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["BUTTON:nth-child(3)"]; // TODO: LIST
 const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/toy/test.html";
 const height = argv[5] ?? undefined;
 const width = argv[6] ?? undefined;
@@ -80,6 +80,9 @@ async function main() {
         let watchedEvents = new Set();
 
         let last: string = "";
+        let currTarget: string | undefined;
+        let currTargetId: number | undefined;
+        
         const bodyID = (await Runtime.evaluate({ expression: "document.body" })).result.objectId;
         Debugger.on('paused', async (e) => {
 
@@ -99,7 +102,12 @@ async function main() {
 
             const html = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
             const screenshot = (await Page.captureScreenshot({ format: 'png' })).data;
-            const scriptsInvolved: Array<{ [key: string]: any }> = [];
+            const newTargetId = (await DOM.querySelector({
+                nodeId: docId,
+                selector: currTarget!,
+            })).nodeId;
+
+            const scriptsInvolved: Array<{ [key: string]: any }> = []; // local scripts
             e.callFrames.forEach(frame => {
                 if (scripts.has(frame.location.scriptId)) {
                     scriptsInvolved.push({
@@ -109,6 +117,7 @@ async function main() {
                 }
             });
 
+
             if (scriptsInvolved.length > 0) {
                 if (last.localeCompare(html) !== 0) {
                     scriptsInvolved.forEach(script => {
@@ -117,6 +126,7 @@ async function main() {
                             {
                                 ...script,
                                 html: html,
+                                targetExists: currTargetId === newTargetId,
                                 screenshot: screenshot,
                             }
                         ];
@@ -145,10 +155,19 @@ async function main() {
                 watchedEvents.add(events[i]);
             }
 
-            const targetNodeId = (await DOM.querySelector({
+            currTarget = target_selectors[i];
+
+            currTargetId = (await DOM.querySelector({
                 nodeId: docId,
-                selector: target_selectors[i],
+                selector: currTarget,
             })).nodeId;
+
+            // add current target and event info to the last recorded data
+            if (i !== 0) {
+                htmls[htmls.length-1].nextEvent = events[i];
+                htmls[htmls.length-1].nextTarget = target_selectors[i];
+                htmls[htmls.length-1].nextTargetExists = true;
+            }
 
 
             // TODO: the argument of `dispatchEvent depends on event name/type
@@ -163,14 +182,11 @@ async function main() {
                 if (!html.target) {
                     html.target = target_selectors[i];
                 }
-                const currTargetNodeId = (await DOM.querySelector({
-                    nodeId: docId,
-                    selector: target_selectors[i]
-                })).nodeId;
-                html.targetExists = targetNodeId === currTargetNodeId;
             }
 
             htmls = [...htmls, ...newHTMLs];
+            // console.log(`******${events[i]}, ${target_selectors[i]}******`)
+            // console.log(htmls);
 
             newHTMLs = []; // reset new htmls
 
