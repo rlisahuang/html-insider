@@ -4,8 +4,8 @@ import { stdout, stderr, argv } from "process";
 
 type LaunchedChrome = chromeLauncher.LaunchedChrome;
 
-const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click"]; // TODO: list
-const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["BUTTON:nth-child(3)"]; // TODO: LIST
+const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click", "click"];
+const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["button#btn3", "button#btn3"];
 const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/toy/test.html";
 const height = argv[5] ?? undefined;
 const width = argv[6] ?? undefined;
@@ -73,71 +73,63 @@ async function main() {
 
     // Wait for window.onload before doing stuff.
     Page.on('loadEventFired', async () => {
-
-
-        let htmls: Array<{ [key: string]: any }> = [];
-        let newHTMLs: Array<{ [key: string]: any }> = [];
-        let watchedEvents = new Set();
-
-        let last: string = "";
-        let currTarget: string | undefined;
-        let currTargetId: number | undefined;
         
+        let watchedEvents = new Set();
         const bodyID = (await Runtime.evaluate({ expression: "document.body" })).result.objectId;
+        let last: string = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
+        let lastCallStack: Array<{ [key: string]: any }> = []; // local scripts only
+        let htmls: Array<{ [key: string]: any }> = [{start: true, html: last, events: []}];
+        let newHTMLs: Array<{ [key: string]: any }> = [];
+
+        let lastEvent: string | undefined;
+        let lastTarget: string | undefined;
+        let lastTargetId: number | undefined;
+
         Debugger.on('paused', async (e) => {
-
-            /**
-             * - obtain stack traces from scripts in `scripts` and their lineno
-             * - obtain html
-             * - if html different from the last one recorded:
-             *  - for all script/lineno pairs, record html to `htmls` in the following format:
-             *    {
-             *      "script": scripts.get(scriptId),
-             *      "lineno": lineno,
-             *      "html": html
-             *     }
-             * - set `last` to current
-             *  
-             */
-
             const html = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
             const screenshot = (await Page.captureScreenshot({ format: 'png' })).data;
             const newTargetId = (await DOM.querySelector({
                 nodeId: docId,
-                selector: currTarget!,
+                selector: lastTarget!,
             })).nodeId;
 
-            const scriptsInvolved: Array<{ [key: string]: any }> = []; // local scripts
-            e.callFrames.forEach(frame => {
-                if (scripts.has(frame.location.scriptId)) {
-                    scriptsInvolved.push({
-                        script: scripts.get(frame.location.scriptId),
-                        lineno: frame.location.lineNumber,
-                    });
-                }
-            });
-
-
-            if (scriptsInvolved.length > 0) {
+            if (lastCallStack.length > 0) {
                 if (last.localeCompare(html) !== 0) {
-                    scriptsInvolved.forEach(script => {
-                        newHTMLs = [
-                            ...newHTMLs,
-                            {
-                                ...script,
-                                html: html,
-                                targetExists: currTargetId === newTargetId,
-                                screenshot: screenshot,
-                            }
-                        ];
-                    });
+                    newHTMLs = [
+                        ...newHTMLs,
+                        {
+                            html: html,
+                            events: [
+                                {
+                                    name: lastEvent!,
+                                    target: lastTarget!,
+                                    targetExists: lastTargetId === newTargetId
+                                },
+                            ],
+                            locations: lastCallStack,
+                            screenshot: screenshot,
+                        }
+                    ];
                 }
-
-                last = html;
             }
 
+            last = html;
+
+            const currCallStack: Array<{ [key: string]: any }> = []; // local scripts
+            for (let i = 0; i < e.callFrames.length; i++) {
+                const frame = e.callFrames[i];
+                if (scripts.has(frame.location.scriptId)) {
+                    currCallStack.push({
+                        script: scripts.get(frame.location.scriptId),
+                        lineno: frame.location.lineNumber + 1, // convert 0-index to 1-index
+                    });
+                }
+            }
+            lastCallStack = currCallStack;
+
+
+            
             await Debugger.stepInto({});
-            // TODO: if Debugger paused in HTML, then step into, otherwise step over, and if Debugger ends in HTML, then resume
         });
 
 
@@ -155,38 +147,40 @@ async function main() {
                 watchedEvents.add(events[i]);
             }
 
-            currTarget = target_selectors[i];
+            lastEvent = events[i];
+            lastTarget = target_selectors[i];
 
-            currTargetId = (await DOM.querySelector({
+            lastTargetId = (await DOM.querySelector({
                 nodeId: docId,
-                selector: currTarget,
+                selector: lastTarget,
             })).nodeId;
-
-            // add current target and event info to the last recorded data
-            if (i !== 0) {
-                htmls[htmls.length-1].nextEvent = events[i];
-                htmls[htmls.length-1].nextTarget = target_selectors[i];
-                htmls[htmls.length-1].nextTargetExists = true;
-            }
-
 
             // TODO: the argument of `dispatchEvent depends on event name/type
             await Runtime.evaluate({
                 expression: `document.querySelector('${target_selectors[i]}').dispatchEvent(new MouseEvent('${events[i]}'));`
             });
 
-            for (const html of newHTMLs) {
-                if (!html.event) {
-                    html.event = events[i];
+            if (i === 0) { // record the first event info to the start HTMl record
+                if (!htmls[0].start) {
+                    throw new Error('first record is not start'); // assertion check
                 }
-                if (!html.target) {
-                    html.target = target_selectors[i];
-                }
-            }
 
+                htmls[0].events.push(
+                    {
+                        name: events[i],
+                        target: target_selectors[i],
+                        targetExists: true,
+                    }
+                )
+            } else {
+                htmls[htmls.length - 1].events.push({
+                    name: events[i],
+                    target: target_selectors[i],
+                    targetExists: true,
+                })
+            }
+ 
             htmls = [...htmls, ...newHTMLs];
-            // console.log(`******${events[i]}, ${target_selectors[i]}******`)
-            // console.log(htmls);
 
             newHTMLs = []; // reset new htmls
 
@@ -198,7 +192,7 @@ async function main() {
 
         await protocol.close();
         await chrome.kill(); // Kill Chrome.
-        // }, 10000);
+        // }, 1000000);
     });
 }
 
