@@ -1,11 +1,11 @@
-import CDP, { Protocol } from "chrome-remote-interface";
+import CDP from "chrome-remote-interface";
 import * as chromeLauncher from "chrome-launcher";
 import { stdout, stderr, argv } from "process";
 
 type LaunchedChrome = chromeLauncher.LaunchedChrome;
 
-const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click", "click"];
-const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["button#btn3", "button#btn3"];
+const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click"];
+const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["button#btn1"];
 const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/toy/test.html";
 const height = argv[5] ?? undefined;
 const width = argv[6] ?? undefined;
@@ -53,9 +53,9 @@ async function main() {
     const scripts: Map<string, string> = new Map<string, string>();
 
     Debugger.on('scriptParsed', (e) => {
-        if (''.localeCompare(e.url) !== 0) {
+        if ('' !== e.url) {
 
-            if (scripts.has(e.scriptId) && scripts.get(e.scriptId).localeCompare(e.url) !== 0) {
+            if (scripts.has(e.scriptId) && scripts.get(e.scriptId) !== e.url) {
                 throw new Error('scriptId and url mismatch');
             }
 
@@ -76,7 +76,7 @@ async function main() {
         
         let watchedEvents = new Set();
         const bodyID = (await Runtime.evaluate({ expression: "document.body" })).result.objectId;
-        let last: string = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
+        let last: string = String((await Runtime.evaluate({expression: "document.documentElement.innerHTML"})).result.value);
         const screenshot = (await Page.captureScreenshot({ format: 'png' })).data;
 
         let lastCallStack: Array<{ [key: string]: any }> = []; // local scripts only
@@ -89,7 +89,7 @@ async function main() {
         let lastIdx: number | undefined;
 
         Debugger.on('paused', async (e) => {
-            const html = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
+            const html = (await Runtime.evaluate({expression: "document.documentElement.innerHTML"})).result.value;
             const screenshot = (await Page.captureScreenshot({ format: 'png' })).data;
             const newTargetId = (await DOM.querySelector({
                 nodeId: docId,
@@ -97,7 +97,7 @@ async function main() {
             })).nodeId;
 
             if (lastCallStack.length > 0) {
-                if (last.localeCompare(html) !== 0) {
+                if (last !== html) {
                     newHTMLs = [
                         ...newHTMLs,
                         {
