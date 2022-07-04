@@ -76,7 +76,8 @@ async function main() {
         
         let watchedEvents = new Set();
         const bodyID = (await Runtime.evaluate({ expression: "document.body" })).result.objectId;
-        let last: string = String((await Runtime.evaluate({expression: "document.documentElement.innerHTML"})).result.value);
+        let last: string = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
+        // let last: string = String((await Runtime.evaluate({expression: "document.documentElement.innerHTML"})).result.value);
         const screenshot = (await Page.captureScreenshot({ format: 'png' })).data;
 
         let lastCallStack: Array<{ [key: string]: any }> = []; // local scripts only
@@ -89,7 +90,8 @@ async function main() {
         let lastIdx: number | undefined;
 
         Debugger.on('paused', async (e) => {
-            const html = (await Runtime.evaluate({expression: "document.documentElement.innerHTML"})).result.value;
+            // const html = (await Runtime.evaluate({expression: "document.documentElement.innerHTML"})).result.value;
+            const html = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
             const screenshot = (await Page.captureScreenshot({ format: 'png' })).data;
             const newTargetId = (await DOM.querySelector({
                 nodeId: docId,
