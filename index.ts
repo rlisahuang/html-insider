@@ -5,8 +5,8 @@ import { stdout, stderr, argv } from "process";
 type LaunchedChrome = chromeLauncher.LaunchedChrome;
 
 const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click"];
-const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["button#btn1"];
-const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/toy/test.html";
+const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["td#el_1_6"]; // second row, second col
+const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/table-editing/index.html";
 const height = argv[5] ?? undefined;
 const width = argv[6] ?? undefined;
 
@@ -73,7 +73,7 @@ async function main() {
 
     // Wait for window.onload before doing stuff.
     Page.on('loadEventFired', async () => {
-        
+
         let watchedEvents = new Set();
         const bodyID = (await Runtime.evaluate({ expression: "document.body" })).result.objectId;
         let last: string = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
@@ -81,7 +81,7 @@ async function main() {
         const screenshot = (await Page.captureScreenshot({ format: 'png' })).data;
 
         let lastCallStack: Array<{ [key: string]: any }> = []; // local scripts only
-        let htmls: Array<{ [key: string]: any }> = [{start: true, html: last, events: [], screenshot: screenshot}];
+        let htmls: Array<{ [key: string]: any }> = [{ start: true, html: last, events: [], screenshot: screenshot }];
         let newHTMLs: Array<{ [key: string]: any }> = [];
 
         let lastEvent: string | undefined;
@@ -133,8 +133,8 @@ async function main() {
             }
             lastCallStack = currCallStack;
 
+            // console.log(html);
 
-            
             await Debugger.stepInto({});
         });
 
@@ -189,7 +189,7 @@ async function main() {
                     targetExists: true,
                 })
             }
- 
+
             htmls = [...htmls, ...newHTMLs];
 
             newHTMLs = []; // reset new htmls
