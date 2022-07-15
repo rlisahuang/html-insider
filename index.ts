@@ -5,7 +5,7 @@ import { stdout, stderr, argv } from "process";
 type LaunchedChrome = chromeLauncher.LaunchedChrome;
 
 const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click"];
-const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["td#el_1_6"]; // second row, second col
+const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["BODY > TABLE:nth-child(2) > TBODY:nth-child(2) > TR:nth-child(2) > TD:nth-child(3) > DIV:nth-child(1) > DIV:nth-child(1)"]; // second row, second col
 const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/table-editing/index.html";
 const height = argv[5] ?? undefined;
 const width = argv[6] ?? undefined;
@@ -79,6 +79,7 @@ async function main() {
         let last: string = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
         // let last: string = String((await Runtime.evaluate({expression: "document.documentElement.innerHTML"})).result.value);
         const screenshot = (await Page.captureScreenshot({ format: 'png' })).data;
+        // const screenshot = "";
 
         let lastCallStack: Array<{ [key: string]: any }> = []; // local scripts only
         let htmls: Array<{ [key: string]: any }> = [{ start: true, html: last, events: [], screenshot: screenshot }];
@@ -164,9 +165,16 @@ async function main() {
             })).nodeId;
 
             // TODO: the argument of `dispatchEvent depends on event name/type
-            await Runtime.evaluate({
-                expression: `document.querySelector('${target_selectors[i]}').dispatchEvent(new MouseEvent('${events[i]}'));`
-            });
+            // BUG: we might end up having to use `click` only as dispatchEvent(click) sometimes fails
+            if (events[i] === 'click') {
+                await Runtime.evaluate({
+                    expression: `document.querySelector('${target_selectors[i]}').click();`
+                });
+            } else {
+                await Runtime.evaluate({
+                    expression: `document.querySelector('${target_selectors[i]}').dispatchEvent(new MouseEvent('${events[i]}'));`
+                });
+            }
 
             if (i === 0) { // record the first event info to the start HTMl record
                 if (!htmls[0].start) {
