@@ -5,8 +5,12 @@ import { stdout, stderr, argv } from "process";
 type LaunchedChrome = chromeLauncher.LaunchedChrome;
 
 const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click"];
-const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["BODY > TABLE:nth-child(2) > TBODY:nth-child(2) > TR:nth-child(2) > TD:nth-child(3) > DIV:nth-child(1) > DIV:nth-child(1)"]; // second row, second col
-const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/table-editing/index.html";
+// const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["BODY > TABLE:nth-child(2) > TBODY:nth-child(2) > TR:nth-child(2) > TD:nth-child(3) > DIV:nth-child(1) > DIV:nth-child(1)"]; // second row, second col
+const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["button#btn1"];
+
+// const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/table-editing/index.html";
+const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/demo/test.html";
+
 const height = argv[5] ?? undefined;
 const width = argv[6] ?? undefined;
 
