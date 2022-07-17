@@ -80,13 +80,12 @@ async function main() {
 
         let watchedEvents = new Set();
         const bodyID = (await Runtime.evaluate({ expression: "document.body" })).result.objectId;
-        let last: string = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
-        // let last: string = String((await Runtime.evaluate({expression: "document.documentElement.innerHTML"})).result.value);
+        const html: string = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
         const screenshot = (await Page.captureScreenshot({ format: 'png' })).data;
-        // const screenshot = "";
+        let last = screenshot;
 
         let lastCallStack: Array<{ [key: string]: any }> = []; // local scripts only
-        let htmls: Array<{ [key: string]: any }> = [{ start: true, html: last, events: [], screenshot: screenshot }];
+        let htmls: Array<{ [key: string]: any }> = [{ start: true, html: html, events: [], screenshot: screenshot }];
         let newHTMLs: Array<{ [key: string]: any }> = [];
 
         let lastEvent: string | undefined;
@@ -95,7 +94,6 @@ async function main() {
         let lastIdx: number | undefined;
 
         Debugger.on('paused', async (e) => {
-            // const html = (await Runtime.evaluate({expression: "document.documentElement.innerHTML"})).result.value;
             const html = (await DOM.getOuterHTML({ objectId: bodyID })).outerHTML;
             const screenshot = (await Page.captureScreenshot({ format: 'png' })).data;
             const newTargetId = (await DOM.querySelector({
@@ -104,7 +102,7 @@ async function main() {
             })).nodeId;
 
             if (lastCallStack.length > 0) {
-                if (last !== html) {
+                if (last !== screenshot) {
                     newHTMLs = [
                         ...newHTMLs,
                         {
@@ -124,7 +122,7 @@ async function main() {
                 }
             }
 
-            last = html;
+            last = screenshot;
 
             const currCallStack: Array<{ [key: string]: any }> = []; // local scripts
             for (let i = 0; i < e.callFrames.length; i++) {
