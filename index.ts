@@ -170,15 +170,24 @@ async function main() {
 
             // TODO: the argument of `dispatchEvent depends on event name/type
             // BUG: we might end up having to use `click` only as dispatchEvent(click) sometimes fails
-            if (events[i] === 'click') {
-                await Runtime.evaluate({
-                    expression: `document.querySelector('${target_selectors[i]}').click();`
-                });
-            } else {
-                await Runtime.evaluate({
-                    expression: `document.querySelector('${target_selectors[i]}').dispatchEvent(new MouseEvent('${events[i]}'));`
-                });
-            }
+            // if (events[i] === 'click') {
+                // bug: the following method (through jQuery I guess) enters into an infinite loop
+                // for the 'demo' example
+            //     await Runtime.evaluate({
+            //         expression: `document.querySelector('${target_selectors[i]}').click();`
+            //     });
+            // } else {
+            //     await Runtime.evaluate({
+            //         expression: `document.querySelector('${target_selectors[i]}').dispatchEvent(new MouseEvent('${events[i]}'));`
+            //     });
+            // }
+
+
+            // BUG: for non-clickable examples (e.g. table-editing), the following call does not get executed
+            // on non-button elements for some reason. 
+            await Runtime.evaluate({
+                expression: `document.querySelector('${target_selectors[i]}').dispatchEvent(new MouseEvent('${events[i]}'));`
+            });
 
             if (i === 0) { // record the first event info to the start HTMl record
                 if (!htmls[0].start) {
@@ -210,10 +219,10 @@ async function main() {
 
 
         // setTimeout(async () => {
-        stdout.write(JSON.stringify({ result: htmls }));
+            stdout.write(JSON.stringify({ result: htmls }));
 
-        await protocol.close();
-        await chrome.kill(); // Kill Chrome.
+            await protocol.close();
+            await chrome.kill(); // Kill Chrome.
         // }, 1000000);
     });
 }
