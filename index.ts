@@ -28,7 +28,7 @@ const width = argv[6] ?? undefined;
 function launchChrome(headless: boolean | undefined = true): Promise<LaunchedChrome> {
     // headless = false;
     // const windowSize = (height && width) ? `--window-size=${height},${width}` : "--start-fullscreen";
-    const windowSize = (height && width) ? `--window-size=${height},${width}` : "--window-size=600,400";
+    const windowSize = (height && width) ? `--window-size=${width},${height}` : "--window-size=600,400";
 
     return chromeLauncher.launch({
         port: 9224, // Uncomment to force a specific port of your choice.
