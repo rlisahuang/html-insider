@@ -6,10 +6,11 @@ type LaunchedChrome = chromeLauncher.LaunchedChrome;
 
 const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click"];
 // const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["BODY > TABLE:nth-child(2) > TBODY:nth-child(2) > TR:nth-child(2) > TD:nth-child(3) > DIV:nth-child(1) > DIV:nth-child(1)"]; // second row, second col
-const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["button#btn1"];
+const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["BODY > DIV:nth-child(2) > DIV:nth-child(1) > IMG:nth-child(1)"];
 
+const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/memory-game/index.html";
 // const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/table-editing/index.html";
-const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/demo/test.html";
+// const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/demo/test.html";
 
 const height = argv[5] ?? undefined;
 const width = argv[6] ?? undefined;
@@ -47,8 +48,8 @@ async function main() {
 
     // Extract the DevTools protocol domains we need and enable them.
     // See API docs: https://chromedevtools.github.io/devtools-protocol/
-    const { Page, Runtime, Debugger, DOM, DOMDebugger } = protocol;
-    await Promise.all([Page.enable(), Runtime.enable()]);
+    const { Page, Network, Runtime, Debugger, DOM, DOMDebugger } = protocol;
+    await Promise.all([Page.enable(), Runtime.enable(), Network.enable({})]);
 
     Page.navigate({ url: viewFile });
     Debugger.enable({});
@@ -183,8 +184,13 @@ async function main() {
 
             // BUG: for non-clickable examples (e.g. table-editing), the following call does not get executed
             // on non-button elements for some reason. 
+            const mockEvent = `new MouseEvent('${events[i]}', {
+                bubbles: true,
+                cancelable: true,
+                view: window
+              })`;
             await Runtime.evaluate({
-                expression: `document.querySelector('${target_selectors[i]}').dispatchEvent(new MouseEvent('${events[i]}'));`
+                expression: `document.querySelector('${target_selectors[i]}').dispatchEvent(${mockEvent});`
             });
 
             if (i === 0) { // record the first event info to the start HTMl record
@@ -218,6 +224,7 @@ async function main() {
 
         // setTimeout(async () => {
             stdout.write(JSON.stringify({ result: htmls }));
+            // stdout.write(String(htmls.length));
 
             await protocol.close();
             await chrome.kill(); // Kill Chrome.
