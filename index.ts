@@ -62,7 +62,7 @@ async function main() {
         const msg = e.exceptionDetails.exception.description;
         const line = e.exceptionDetails.lineNumber + 1;
         const col = e.exceptionDetails.columnNumber + 1;
-        throw new Error(`[line ${line}, col${col}]: \n${msg}`);
+        stderr.write(`[line ${line}, col${col}]: \n${msg}`);
     });
 
     Debugger.on('scriptParsed', (e) => {
@@ -232,6 +232,8 @@ async function main() {
 
 
         // setTimeout(async () => {
+            // there will be both std and stderr if there are runtime errors with the given script,
+            // so we need to process the error first in the front end
             stdout.write(JSON.stringify({ result: htmls }));
             // stdout.write(String(htmls.length));
 
@@ -246,6 +248,7 @@ async function main() {
     try {
         await main();
     } catch (e) {
+        // why is error from main not picked up here?
         stderr.write(e.message);
     }
 })();
