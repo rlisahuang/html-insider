@@ -57,7 +57,16 @@ async function main() {
 
     const scripts: Map<string, string> = new Map<string, string>();
 
+    Runtime.on('exceptionThrown', (e) => {
+        // throw the error to stderr
+        const msg = e.exceptionDetails.exception.description;
+        const line = e.exceptionDetails.lineNumber + 1;
+        const col = e.exceptionDetails.columnNumber + 1;
+        throw new Error(`[line ${line}, col${col}]: \n${msg}`);
+    });
+
     Debugger.on('scriptParsed', (e) => {
+
         if ('' !== e.url) {
 
             if (scripts.has(e.scriptId) && scripts.get(e.scriptId) !== e.url) {
