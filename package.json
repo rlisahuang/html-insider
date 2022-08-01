@@ -5,7 +5,6 @@
   "main": "index.js",
   "scripts": {
     "check": "tsc",
-    "old-check": "tsc index.ts --esModuleInterop --moduleResolution node --outDir build/",
     "bundle": "esbuild --bundle index.ts --outfile=dist/build/main.js --platform=node",
     "copy": "cp -rf dist/build/main.js ../vscode/scripts",
     "build": "npm run bundle && npm run copy",

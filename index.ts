@@ -28,7 +28,6 @@ const width = argv[6] ?? undefined;
  */
 function launchChrome(headless: boolean | undefined = true): Promise<LaunchedChrome> {
     // headless = false;
-    // const windowSize = (height && width) ? `--window-size=${height},${width}` : "--start-fullscreen";
     const windowSize = (height && width) ? `--window-size=${width},${height}` : "--window-size=600,400";
 
     return chromeLauncher.launch({
@@ -175,21 +174,6 @@ async function main() {
                 nodeId: docId,
                 selector: lastTarget,
             })).nodeId;
-
-            // TODO: the argument of `dispatchEvent depends on event name/type
-            // BUG: we might end up having to use `click` only as dispatchEvent(click) sometimes fails
-            // if (events[i] === 'click') {
-                // bug: the following method (through jQuery I guess) enters into an infinite loop
-                // for the 'demo' example
-            //     await Runtime.evaluate({
-            //         expression: `document.querySelector('${target_selectors[i]}').click();`
-            //     });
-            // } else {
-            //     await Runtime.evaluate({
-            //         expression: `document.querySelector('${target_selectors[i]}').dispatchEvent(new MouseEvent('${events[i]}'));`
-            //     });
-            // }
-
 
             // BUG: for non-clickable examples (e.g. table-editing), the following call does not get executed
             // on non-button elements for some reason. 
