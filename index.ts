@@ -6,9 +6,11 @@ type LaunchedChrome = chromeLauncher.LaunchedChrome;
 
 const events: string[] = argv[2] ? JSON.parse(argv[2]).events : ["click"];
 // const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["BODY > TABLE:nth-child(2) > TBODY:nth-child(2) > TR:nth-child(2) > TD:nth-child(3) > DIV:nth-child(1) > DIV:nth-child(1)"]; // second row, second col
-const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["BODY > DIV:nth-child(2) > DIV:nth-child(1) > IMG:nth-child(1)"];
+// const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["BODY > DIV:nth-child(2) > DIV:nth-child(1) > IMG:nth-child(1)"];
+const target_selectors: string[] = argv[3] ? JSON.parse(argv[3]).targets : ["[data-number]"]
 
-const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/memory-game/index.html";
+const viewFile = argv[4] ?? "file:///Users/lisa/projects/StepNTune/user-study/tasks/calculator/nectarine/index.html";
+// const viewFile = argv[4] ?? "http://127.0.0.1:8080/index.html";
 // const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/table-editing/index.html";
 // const viewFile = argv[4] ?? "file:///Users/lisa/projects/LiveWeb/tasks/demo/test.html";
 
@@ -219,6 +221,7 @@ async function main() {
             // there will be both std and stderr if there are runtime errors with the given script,
             // so we need to process the error first in the front end
             stdout.write(JSON.stringify({ result: htmls }));
+            // stderr.write(JSON.stringify({result: htmls.length}));
             // stdout.write(String(htmls.length));
 
             await protocol.close();
